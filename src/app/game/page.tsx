@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import TechNeuraLogo from "@/components/TechNeuraLogo";
 
 function GameContent() {
   const searchParams = useSearchParams();
@@ -143,7 +144,7 @@ function GameContent() {
           <div className="col-span-12 lg:col-span-6 flex flex-col items-center order-1 lg:order-2">
             <div className="mb-10 text-center">
               <h1 className="text-white text-3xl font-bold tracking-[0.4em] uppercase mb-4">
-                Tech Neura
+                TECHNEURA Tap Challenge
               </h1>
               <p className="text-white/60 text-xl italic">
                 Identity:{" "}
@@ -154,20 +155,17 @@ function GameContent() {
             </div>
 
             <div className="relative w-full max-w-lg aspect-video flex items-center justify-center">
-              <div className="absolute inset-0 bg-primary-indigo/20 blur-[100px] rounded-full"></div>
+              {/* <div className="absolute inset-0 bg-primary-indigo/20 blur-[100px] rounded-full"></div> */}
               <div className="glass-panel w-full h-full rounded-[3rem] flex flex-col items-center justify-center border-white/10 relative z-10">
-                {status === "waiting" && (
-                  <div className="text-center opacity-30">
-                    <Image
-                      src="/logo/logo-techneura.png"
-                      width={100}
-                      height={100}
-                      alt="Logo"
-                      className="mx-auto grayscale mb-4"
+                {(status === "playing" || status === "waiting") && (
+                  <div
+                    onClick={handleTap}
+                    className={`transition-transform active:scale-90 duration-75 ${status === "playing" ? "cursor-pointer" : "opacity-20 pointer-events-none"}`}
+                  >
+                    <TechNeuraLogo
+                      colorMode={status === "playing" ? colorMode : "default"}
+                      gameState={status as any}
                     />
-                    <h2 className="text-xl font-bold uppercase tracking-widest animate-pulse">
-                      Awaiting Uplink
-                    </h2>
                   </div>
                 )}
 
@@ -180,30 +178,6 @@ function GameContent() {
                   >
                     {countdown}
                   </motion.h1>
-                )}
-
-                {status === "playing" && (
-                  <motion.div
-                    onClick={handleTap}
-                    className="relative w-48 h-48 md:w-64 md:h-64 cursor-pointer select-none active:scale-90 transition-transform"
-                  >
-                    <AnimatePresence>
-                      {colorMode === "gold" && (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 0.4 }}
-                          exit={{ opacity: 0 }}
-                          className="absolute inset-0 bg-accent-gold rounded-full blur-[80px]"
-                        />
-                      )}
-                    </AnimatePresence>
-                    <Image
-                      src="/logo/logo-techneura.png"
-                      fill
-                      alt="Target"
-                      className={`object-contain transition-all duration-200 ${colorMode === "black" ? "brightness-50 grayscale" : "brightness-125"}`}
-                    />
-                  </motion.div>
                 )}
 
                 {status === "ended" && (
