@@ -4,8 +4,10 @@
 import { useState } from "react";
 import { registerPlayer } from "@/app/actions/register";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -17,7 +19,13 @@ export default function RegisterPage() {
     if (result.error) {
       setMessage(result.error);
     } else {
-      setMessage("Success! Check your email for the game link.");
+      setMessage(
+        "You have successfully registered! Let's get you to the game...",
+      );
+      // Optionally, redirect after a delay
+      setTimeout(() => {
+        router.push("/game");
+      }, 3000);
     }
   }
   return (
@@ -45,9 +53,6 @@ export default function RegisterPage() {
             <h1 className="text-2xl md:text-3xl font-bold mb-2 tracking-tight">
               TECHNEURA TAP CHALLENGE
             </h1>
-            <p className="text-white/50 text-xs md:text-sm font-light">
-              Register to receive your unique game link
-            </p>
           </div>
           {message ? (
             <div className="p-4 bg-blue-500/20 border border-blue-500 rounded text-center">

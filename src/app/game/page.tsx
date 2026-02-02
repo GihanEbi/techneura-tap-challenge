@@ -18,10 +18,11 @@ function GameContent() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [playerName, setPlayerName] = useState("");
 
+  const [logoPosition, setLogoPosition] = useState({ x: 0, y: 0 });
+
   useEffect(() => {
     if (!playerId) return;
 
-    // Fetch Player Info
     supabase
       .from("players")
       .select("nickname, score")
@@ -34,15 +35,21 @@ function GameContent() {
         }
       });
 
-    // Real-time Status & SYNCED Color Listener
     const statusChannel = supabase
       .channel("game_status")
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "game_settings" },
         (payload) => {
-          setStatus(payload.new.status);
-          if (payload.new.color_mode) setColorMode(payload.new.color_mode); // SYNCED
+          const newData = payload.new;
+          setStatus(newData.status);
+          if (newData.color_mode) setColorMode(newData.color_mode);
+          if (
+            newData.position_x !== undefined &&
+            newData.position_y !== undefined
+          ) {
+            setLogoPosition({ x: newData.position_x, y: newData.position_y });
+          }
         },
       )
       .subscribe();
@@ -80,11 +87,12 @@ function GameContent() {
     }
   }, [status, countdown]);
 
-  const handleTap = async () => {
+  const handleTap = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
     if (status !== "playing") return;
+
     const change = colorMode === "gold" ? 1 : -3;
 
-    // Safety: Functional update to prevent race conditions on fast taps
     setScore((prev) => {
       const nextScore = prev + change;
       supabase
@@ -97,134 +105,199 @@ function GameContent() {
   };
 
   return (
-    <main className="mesh-gradient min-h-screen flex flex-col items-center py-8 px-4 md:px-10 lg:py-12 overflow-hidden font-display">
-      <div className="w-full max-w-7xl flex flex-col gap-10">
-        <div className="grid grid-cols-12 gap-6 lg:gap-10 items-start">
-          {/* RULES SECTION */}
-          <div className="col-span-12 lg:col-span-3 order-2 lg:order-1">
-            <div className="glass-panel rounded-[2rem] p-6 lg:p-8 relative overflow-hidden">
-              <div className="flex items-center gap-3 mb-8">
-                <span className="material-symbols-outlined text-primary-indigo">
-                  terminal
-                </span>
-                <h2 className="text-white font-bold tracking-widest uppercase text-sm">
-                  Rules
-                </h2>
-              </div>
-              <div className="space-y-6">
-                <div
-                  className={`flex items-center gap-4 transition-opacity ${colorMode === "gold" ? "opacity-100" : "opacity-30"}`}
-                >
-                  <div className="size-10 rounded-2xl glass-card flex items-center justify-center border-accent-gold/50">
-                    <span className="material-symbols-outlined text-accent-gold">
-                      bolt
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-accent-gold uppercase tracking-tighter">
-                    Tap now!
-                  </p>
-                </div>
-                <div
-                  className={`flex items-center gap-4 transition-opacity ${colorMode === "black" ? "opacity-100" : "opacity-30"}`}
-                >
-                  <div className="size-10 rounded-2xl glass-card flex items-center justify-center border-white/20">
-                    <span className="material-symbols-outlined text-white/40">
-                      block
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-white/40 uppercase tracking-tighter">
-                    Freeze!
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+    <main className="min-h-screen bg-[#050505] text-white flex flex-col items-center py-6 px-4 overflow-hidden relative">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-          {/* MAIN GAME AREA */}
-          <div className="col-span-12 lg:col-span-6 flex flex-col items-center order-1 lg:order-2">
-            <div className="mb-10 text-center">
-              <h1 className="text-white text-3xl font-bold tracking-[0.4em] uppercase mb-4">
-                TECHNEURA Tap Challenge
-              </h1>
-              <p className="text-white/60 text-xl italic">
-                Identity:{" "}
-                <span className="text-white font-bold glow-text-indigo">
-                  {playerName}
-                </span>
-              </p>
-            </div>
+      {/* 1. TOP LOGO */}
+      <header className="z-10 mb-4">
+        <motion.div
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+        >
+          <Image
+            src="/logo/logo-techneura.png"
+            width={130}
+            height={130}
+            alt="Logo"
+            priority
+          />
+        </motion.div>
+      </header>
 
-            <div className="relative w-full max-w-lg aspect-video flex items-center justify-center">
-              {/* <div className="absolute inset-0 bg-primary-indigo/20 blur-[100px] rounded-full"></div> */}
-              <div className="glass-panel w-full h-full rounded-[3rem] flex flex-col items-center justify-center border-white/10 relative z-10">
-                {(status === "playing" || status === "waiting") && (
-                  <div
-                    onClick={handleTap}
-                    className={`transition-transform active:scale-90 duration-75 ${status === "playing" ? "cursor-pointer" : "opacity-20 pointer-events-none"}`}
-                  >
-                    <TechNeuraLogo
-                      colorMode={status === "playing" ? colorMode : "default"}
-                      gameState={status as any}
-                    />
-                  </div>
-                )}
+      {/* 2. SCORE */}
+      <section className="z-10 text-center mb-6">
+        <p className="text-blue-400 text-xs font-black uppercase tracking-[0.3em] mb-1">
+          OPERATOR:{" "}
+          <span className="text-white italic">{playerName || "---"}</span>
+        </p>
+        <motion.div
+          key={score}
+          initial={{ scale: 1.2 }}
+          animate={{ scale: 1 }}
+          // Only 2 colors now: White for >= 0, Red for < 0
+          className={`text-8xl md:text-9xl font-black italic tracking-tighter drop-shadow-2xl transition-colors duration-300 ${
+            score < 0 ? "text-red-500" : "text-white"
+          }`}
+        >
+          {score}
+        </motion.div>
+      </section>
 
-                {status === "countdown" && (
-                  <motion.h1
-                    key={countdown}
-                    initial={{ scale: 0.5 }}
-                    animate={{ scale: 1.2 }}
-                    className="text-[10rem] font-black text-bright-blue italic drop-shadow-2xl"
-                  >
-                    {countdown}
-                  </motion.h1>
-                )}
-
-                {status === "ended" && (
-                  <div className="text-center">
-                    <h2 className="text-2xl font-black text-accent-gold mb-4 italic">
-                      TERMINATED
-                    </h2>
-                    {leaderboard.map((u, i) => (
-                      <div
-                        key={i}
-                        className="flex justify-between w-48 mx-auto text-sm border-b border-white/10 py-1"
-                      >
-                        <span>{u.nickname}</span>
-                        <span className="font-bold">{u.score}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* SCORE SECTION */}
-          <div className="col-span-12 lg:col-span-3 order-3">
-            <div className="glass-panel rounded-[2rem] p-8 text-center bg-gradient-to-b from-primary-indigo/20 to-transparent">
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">
-                Current Score
-              </span>
-              <motion.p
-                key={score}
-                initial={{ scale: 1.5 }}
-                animate={{ scale: 1 }}
-                className="text-7xl font-black italic mt-2 drop-shadow-2xl"
+      {/* 3. GAME AREA */}
+      <section className="z-10 w-full max-w-md aspect-square relative">
+        <div className="absolute inset-0 bg-white/[0.03] backdrop-blur-md rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col items-center justify-center">
+          <AnimatePresence mode="wait">
+            {status === "waiting" && (
+              <motion.div
+                key="rules"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-8 text-center"
               >
-                {score}
-              </motion.p>
-            </div>
-          </div>
+                <h2 className="text-blue-500 font-black uppercase tracking-widest text-sm mb-6 underline underline-offset-8">
+                  Engagement Rules
+                </h2>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="size-8 bg-yellow-500 rounded-lg shadow-[0_0_15px_#eab308]" />
+                    <p className="text-xs font-bold uppercase text-left leading-tight">
+                      BRAIN GOLD:
+                      <br />
+                      <span className="text-yellow-500">+1 Point</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="size-8 bg-gray-900 border border-blue-900 rounded-lg" />
+                    <p className="text-xs font-bold uppercase text-left leading-tight">
+                      BRAIN BLACK:
+                      <br />
+                      <span className="text-red-500">-3 Points</span>
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {status === "countdown" && (
+              <motion.div
+                key="countdown"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 2, opacity: 0 }}
+              >
+                <h1 className="text-[12rem] font-black text-blue-500 italic drop-shadow-[0_0_30px_rgba(59,130,246,0.6)]">
+                  {countdown}
+                </h1>
+              </motion.div>
+            )}
+
+            {status === "playing" && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <motion.div
+                  key="playing-logo"
+                  animate={{
+                    x: logoPosition.x,
+                    y: logoPosition.y,
+                    scale: 1,
+                    opacity: 1,
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 80,
+                    damping: 15,
+                    mass: 1,
+                  }}
+                  className="w-32 h-32 cursor-pointer touch-manipulation relative"
+                  onMouseDown={handleTap}
+                  onTouchStart={handleTap}
+                >
+                  <TechNeuraLogo colorMode={colorMode} gameState={status} />
+                </motion.div>
+              </div>
+            )}
+
+            {/* ENDED UI WITH LEADERBOARD */}
+            {status === "ended" && (
+              <motion.div
+                key="ended"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="w-full px-8 text-center flex flex-col items-center justify-center h-full"
+              >
+                <h2 className="text-2xl font-black text-yellow-500 mb-6 italic uppercase">
+                  Mission Ended
+                </h2>
+                <div className="w-full space-y-2">
+                  {leaderboard.slice(0, 3).map((u, i) => (
+                    <div
+                      key={i}
+                      className={`flex justify-between items-center p-4 rounded-2xl border ${
+                        i === 0
+                          ? "bg-yellow-500/20 border-yellow-500/50"
+                          : "bg-white/5 border-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`flex items-center justify-center size-6 rounded-full text-[10px] font-bold text-black ${
+                            i === 0 ? "bg-yellow-500" : "bg-white"
+                          }`}
+                        >
+                          {i + 1}
+                        </span>
+                        <span className="font-bold text-sm truncate max-w-[100px]">
+                          {u.nickname}
+                        </span>
+                      </div>
+                      <span className="font-black italic text-xl">
+                        {u.score}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </div>
+      </section>
+
+      {/* 4. FOOTER LEADERBOARD (Only shows when playing/waiting) */}
+      {status !== "ended" && (
+        <footer className="z-10 mt-auto w-full max-w-md pt-6">
+          <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 backdrop-blur-sm">
+            <div className="flex -space-x-2">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="size-6 rounded-full border-2 border-black bg-blue-600 flex items-center justify-center text-[8px] font-bold"
+                >
+                  {leaderboard[i]?.nickname?.charAt(0) || "?"}
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400">
+              Live Top:{" "}
+              <span className="text-white ml-1">
+                {leaderboard[0]?.score || 0}
+              </span>
+            </p>
+          </div>
+        </footer>
+      )}
     </main>
   );
 }
 
 export default function GamePage() {
   return (
-    <Suspense fallback={<div className="bg-black h-screen" />}>
+    <Suspense
+      fallback={
+        <div className="bg-black h-screen flex items-center justify-center text-blue-500 font-black animate-pulse uppercase tracking-[0.5em]">
+          Syncing...
+        </div>
+      }
+    >
       <GameContent />
     </Suspense>
   );
