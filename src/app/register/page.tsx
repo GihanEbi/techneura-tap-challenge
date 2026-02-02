@@ -24,7 +24,7 @@ export default function RegisterPage() {
       );
       // Optionally, redirect after a delay
       setTimeout(() => {
-        router.push("/game");
+        router.push(`/game?id=${result.gameID}`);
       }, 3000);
     }
   }
@@ -132,9 +132,9 @@ export default function RegisterPage() {
                     required
                   />
                 </div>
-                <p className="text-[10px] text-white/30 px-1">
+                {/* <p className="text-[10px] text-white/30 px-1">
                   Links are secured via WhatsApp.
-                </p>
+                </p> */}
               </div>
 
               <div className="pt-4">
@@ -143,7 +143,7 @@ export default function RegisterPage() {
                   className="w-full h-14 button-gradient rounded-xl text-white font-bold tracking-widest uppercase flex items-center justify-center gap-3 group transition-all active:scale-95"
                   type="submit"
                 >
-                  {loading ? "Registering..." : "Get Game Link"}
+                  {loading ? "Registering..." : "Enroll Me"}
                   <span className="material-symbols-outlined transition-transform group-hover:translate-x-1">
                     arrow_forward
                   </span>

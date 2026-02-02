@@ -39,5 +39,5 @@ export async function registerPlayer(formData: FormData) {
   // Note: For WhatsApp, you would call Twilio/Meta API here.
   // For now, we focus on getting them into the DB and Email.
 
-  return { success: true };
+  return { success: true , gameID: data.id };
 }
