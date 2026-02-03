@@ -57,12 +57,12 @@ export default function LiveLeaderboard() {
   }, []);
 
   const fetchLeaderboard = async () => {
-    // Fetch top 10 for the big screen
+    // FETCH ALL USERS (Removed limit to show everyone)
     const { data } = await supabase
       .from("players")
       .select("nickname, score")
-      .order("score", { ascending: false })
-      .limit(7);
+      .order("score", { ascending: false });
+    // .limit(7); <--- Removed this
     if (data) setLeaderboard(data);
   };
 
@@ -114,9 +114,8 @@ export default function LiveLeaderboard() {
       </header>
 
       {/* --- MAIN CONTENT GRID --- */}
-      <div className="flex-1 grid grid-rows-[45%_55%] gap-8 p-8 max-w-[1800px] mx-auto w-full z-10">
+      <div className="flex-1 grid grid-rows-[45%_55%] gap-8 p-8 max-w-[1800px] mx-auto w-full z-10 overflow-hidden">
         {/* TOP: VISUALIZER AREA */}
-        {/* UPDATED CONTAINER STYLING: Matching Game Page Logic */}
         <section
           className={`relative w-full h-full backdrop-blur-xl rounded-[3rem] shadow-2xl flex flex-col items-center justify-center overflow-hidden transition-all duration-500 border
             ${
@@ -195,7 +194,7 @@ export default function LiveLeaderboard() {
                   <motion.div
                     animate={{ x: logoPosition.x, y: logoPosition.y }}
                     transition={{ type: "spring", stiffness: 80, damping: 15 }}
-                    className="absolute -top-24 -left-24 size-48" // size-48 = 192px (larger for big screen)
+                    className="absolute -top-24 -left-24 size-48"
                   >
                     <TechNeuraLogo colorMode={colorMode} gameState={status} />
                   </motion.div>
@@ -225,22 +224,24 @@ export default function LiveLeaderboard() {
         {/* BOTTOM: LIVE LEADERBOARD */}
         <section className="bg-white/5 backdrop-blur-md rounded-[3rem] border border-white/10 overflow-hidden flex flex-col">
           {/* Table Header */}
-          <div className="px-12 py-6 bg-white/5 border-b border-white/5 flex justify-between items-end">
+          <div className="px-12 py-6 bg-white/5 border-b border-white/5 flex justify-between items-end flex-shrink-0">
             <h3 className="text-2xl font-black uppercase italic tracking-tighter text-blue-400">
               Live Rankings
             </h3>
             <span className="text-xs font-bold uppercase tracking-widest text-white/40">
-              Top {leaderboard.length} Operators
+              {leaderboard.length} Operators Connected
             </span>
           </div>
 
           {/* Table Rows */}
-          <div className="flex-1 p-8 overflow-hidden">
+          {/* Added overflow-y-auto here so we can scroll through all users */}
+          <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
             <div className="grid grid-cols-1 gap-4">
               <AnimatePresence>
                 {leaderboard.map((player, index) => (
                   <motion.div
-                    layout
+                    // FIX: Only animate reordering when the game is PLAYING
+                    layout={status === "playing"}
                     key={player.nickname}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -308,6 +309,24 @@ export default function LiveLeaderboard() {
           </div>
         </section>
       </div>
+
+      {/* Optional: Add custom scrollbar styles for webkit browsers */}
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.4);
+        }
+      `}</style>
     </main>
   );
 }
