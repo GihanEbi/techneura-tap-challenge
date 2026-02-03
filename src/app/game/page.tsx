@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,55 +20,19 @@ function GameContent() {
 
   const [logoPosition, setLogoPosition] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
+  // --- 1. DEFINE FETCHERS ---
+  const fetchPlayerData = useCallback(async () => {
     if (!playerId) return;
-
-    supabase
+    const { data } = await supabase
       .from("players")
       .select("nickname, score")
       .eq("id", playerId)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          setPlayerName(data.nickname);
-          setScore(data.score);
-        }
-      });
+      .single();
 
-    const statusChannel = supabase
-      .channel("game_status")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "game_settings" },
-        (payload) => {
-          const newData = payload.new;
-          setStatus(newData.status);
-          if (newData.color_mode) setColorMode(newData.color_mode);
-          if (
-            newData.position_x !== undefined &&
-            newData.position_y !== undefined
-          ) {
-            setLogoPosition({ x: newData.position_x, y: newData.position_y });
-          }
-        },
-      )
-      .subscribe();
-
-    const leaderChannel = supabase
-      .channel("leaderboard")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "players" },
-        () => fetchLeaderboard(),
-      )
-      .subscribe();
-
-    fetchLeaderboard();
-
-    return () => {
-      supabase.removeChannel(statusChannel);
-      supabase.removeChannel(leaderChannel);
-    };
+    if (data) {
+      setPlayerName(data.nickname);
+      setScore(data.score);
+    }
   }, [playerId]);
 
   const fetchLeaderboard = async () => {
@@ -80,15 +44,104 @@ function GameContent() {
     if (data) setLeaderboard(data);
   };
 
+  // --- 2. MAIN SUBSCRIPTION & LOGIC ---
   useEffect(() => {
+    if (!playerId) return;
+
+    // Initial Load
+    fetchPlayerData();
+    fetchLeaderboard();
+
+    // -- Listener A: Game Settings --
+    const statusChannel = supabase
+      .channel("game_status")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "game_settings" },
+        (payload) => {
+          const newData = payload.new;
+          setStatus(newData.status);
+
+          // If Admin resets to 'waiting', reset local state immediately
+          if (newData.status === "waiting") {
+            setCountdown(5);
+            setTimeout(() => fetchPlayerData(), 500); // Pull reset score
+          }
+
+          if (newData.color_mode) setColorMode(newData.color_mode);
+          if (
+            newData.position_x !== undefined &&
+            newData.position_y !== undefined
+          ) {
+            setLogoPosition({ x: newData.position_x, y: newData.position_y });
+          }
+        }
+      )
+      .subscribe();
+
+    // -- Listener B: Leaderboard Updates --
+    const leaderChannel = supabase
+      .channel("leaderboard")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "players" },
+        () => fetchLeaderboard()
+      )
+      .subscribe();
+
+    // -- Listener C: My Score Updates --
+    const myPlayerChannel = supabase
+      .channel(`my_player_${playerId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "players",
+          filter: `id=eq.${playerId}`,
+        },
+        (payload) => {
+          if (payload.new.score !== undefined) {
+            setScore(payload.new.score);
+          }
+        }
+      )
+      .subscribe();
+
+    // -- Heartbeat Logic --
+    const sendHeartbeat = async () => {
+      await supabase
+        .from("players")
+        .update({ last_seen: new Date().toISOString() })
+        .eq("id", playerId);
+    };
+    sendHeartbeat();
+    const heartbeatInterval = setInterval(sendHeartbeat, 5000);
+
+    return () => {
+      supabase.removeChannel(statusChannel);
+      supabase.removeChannel(leaderChannel);
+      supabase.removeChannel(myPlayerChannel);
+      clearInterval(heartbeatInterval);
+    };
+  }, [playerId, fetchPlayerData]);
+
+  // --- 3. COUNTDOWN TIMER ---
+  useEffect(() => {
+    if (status === "waiting") {
+      setCountdown(5);
+    }
     if (status === "countdown" && countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
       return () => clearTimeout(timer);
     }
   }, [status, countdown]);
 
-  const handleTap = (e: React.MouseEvent | React.TouchEvent) => {
+  // --- 4. TAP HANDLER ---
+  const handleTap = (e: React.PointerEvent) => {
+    e.preventDefault();
     e.stopPropagation();
+
     if (status !== "playing") return;
 
     const change = colorMode === "gold" ? 1 : -3;
@@ -108,7 +161,7 @@ function GameContent() {
     <main className="min-h-screen bg-[#050505] text-white flex flex-col items-center py-6 px-4 overflow-hidden relative">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* 1. TOP LOGO */}
+      {/* HEADER */}
       <header className="z-10 mb-4">
         <motion.div
           initial={{ y: -20, opacity: 0 }}
@@ -124,7 +177,7 @@ function GameContent() {
         </motion.div>
       </header>
 
-      {/* 2. SCORE */}
+      {/* SCORE */}
       <section className="z-10 text-center mb-6">
         <p className="text-blue-400 text-xs font-black uppercase tracking-[0.3em] mb-1">
           OPERATOR:{" "}
@@ -134,7 +187,6 @@ function GameContent() {
           key={score}
           initial={{ scale: 1.2 }}
           animate={{ scale: 1 }}
-          // Only 2 colors now: White for >= 0, Red for < 0
           className={`text-8xl md:text-9xl font-black italic tracking-tighter drop-shadow-2xl transition-colors duration-300 ${
             score < 0 ? "text-red-500" : "text-white"
           }`}
@@ -143,10 +195,22 @@ function GameContent() {
         </motion.div>
       </section>
 
-      {/* 3. GAME AREA */}
+      {/* GAME AREA */}
       <section className="z-10 w-full max-w-md aspect-square relative">
-        <div className="absolute inset-0 bg-white/[0.03] backdrop-blur-md rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col items-center justify-center">
+        {/* UPDATED CONTAINER STYLING:
+            - When Playing: Light "Sky Blue" background + Blue Glow + Darker Border
+            - When Waiting: Transparent/Glass background
+        */}
+        <div
+          className={`absolute inset-0 backdrop-blur-md rounded-[3rem] shadow-2xl overflow-hidden flex flex-col items-center justify-center transition-all duration-500 border
+          ${
+            status === "playing"
+              ? "bg-[#F0F9FF] border-blue-200 shadow-[0_0_40px_rgba(59,130,246,0.3)]" // <-- NEW LIGHT COLOR
+              : "bg-white/[0.03] border-white/10" // Dark Mode
+          }`}
+        >
           <AnimatePresence mode="wait">
+            {/* WAITING UI */}
             {status === "waiting" && (
               <motion.div
                 key="rules"
@@ -179,6 +243,7 @@ function GameContent() {
               </motion.div>
             )}
 
+            {/* COUNTDOWN UI */}
             {status === "countdown" && (
               <motion.div
                 key="countdown"
@@ -192,6 +257,7 @@ function GameContent() {
               </motion.div>
             )}
 
+            {/* PLAYING STATE */}
             {status === "playing" && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <motion.div
@@ -209,15 +275,14 @@ function GameContent() {
                     mass: 1,
                   }}
                   className="w-32 h-32 cursor-pointer touch-manipulation relative"
-                  onMouseDown={handleTap}
-                  onTouchStart={handleTap}
+                  onPointerDown={handleTap}
                 >
                   <TechNeuraLogo colorMode={colorMode} gameState={status} />
                 </motion.div>
               </div>
             )}
 
-            {/* ENDED UI WITH LEADERBOARD */}
+            {/* ENDED UI */}
             {status === "ended" && (
               <motion.div
                 key="ended"
@@ -262,7 +327,7 @@ function GameContent() {
         </div>
       </section>
 
-      {/* 4. FOOTER LEADERBOARD (Only shows when playing/waiting) */}
+      {/* FOOTER */}
       {status !== "ended" && (
         <footer className="z-10 mt-auto w-full max-w-md pt-6">
           <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 backdrop-blur-sm">

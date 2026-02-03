@@ -116,7 +116,16 @@ export default function LiveLeaderboard() {
       {/* --- MAIN CONTENT GRID --- */}
       <div className="flex-1 grid grid-rows-[45%_55%] gap-8 p-8 max-w-[1800px] mx-auto w-full z-10">
         {/* TOP: VISUALIZER AREA */}
-        <section className="relative w-full h-full bg-white/[0.02] backdrop-blur-xl rounded-[3rem] border border-white/10 shadow-2xl flex flex-col items-center justify-center overflow-hidden">
+        {/* UPDATED CONTAINER STYLING: Matching Game Page Logic */}
+        <section
+          className={`relative w-full h-full backdrop-blur-xl rounded-[3rem] shadow-2xl flex flex-col items-center justify-center overflow-hidden transition-all duration-500 border
+            ${
+              status === "playing"
+                ? "bg-[#F0F9FF] border-blue-200 shadow-[0_0_60px_rgba(59,130,246,0.3)]" // Light Mode + Glow
+                : "bg-white/[0.02] border-white/10" // Dark Mode
+            }
+          `}
+        >
           <AnimatePresence mode="wait">
             {/* 1. WAITING / RULES */}
             {status === "waiting" && (
@@ -181,10 +190,6 @@ export default function LiveLeaderboard() {
             {/* 3. PLAYING (MOVING LOGO) */}
             {status === "playing" && (
               <div className="absolute inset-0 w-full h-full">
-                {/* Center marker for visual reference */}
-                {/* <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-4 bg-white/5 rounded-full" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] border border-white/5 rounded-full" /> */}
-
                 {/* Moving Container (Centered) */}
                 <div className="absolute top-1/2 left-1/2 w-0 h-0">
                   <motion.div
@@ -236,7 +241,7 @@ export default function LiveLeaderboard() {
                 {leaderboard.map((player, index) => (
                   <motion.div
                     layout
-                    key={player.nickname} // Ideally use player.id if available in this select, but nickname works for display
+                    key={player.nickname}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ type: "spring", stiffness: 50, damping: 20 }}
